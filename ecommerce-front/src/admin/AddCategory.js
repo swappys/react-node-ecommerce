@@ -14,6 +14,7 @@ const AddCategory = () => {
 
     const handleChange = (event) => {
         seterror('')
+        setSuccess('')
         setName(event.target.value)
 
     };
