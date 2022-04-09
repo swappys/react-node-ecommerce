@@ -6,6 +6,7 @@ import { isAuthenticated } from "../auth";
 import { Link } from "react-router-dom";
 import DropIn from 'braintree-web-drop-in-react';
 import { emptyCart } from "./cartHelpers";
+import { createOrder } from "./apiCore";
 
 const Checkout = ({ products }) => {
 
@@ -37,6 +38,10 @@ const Checkout = ({ products }) => {
         getToken(userId, token)
     }, [])
 
+    const handleAddress = event => {
+        setData({ ...data, address: event.target.value });
+    }
+
     const getTotal = () => {
         return products.reduce((currentValue, nextValue) => {
             return currentValue + nextValue.count * nextValue.price;
@@ -51,11 +56,13 @@ const Checkout = ({ products }) => {
             <Link to='/signin'>
                 <button className="btn btn-primary"> Signin to Checkout</button>
             </Link>
-        )
-    }
+        );
+    };
+
+    let deliveryAddress = data.address;
 
     const buy = () => {
-        setData({ loading: true});
+        setData({ loading: true });
         //send the nonce to your server
         //nonce = data.instance.requestPaymentMethod()
         let nonce;
@@ -75,27 +82,43 @@ const Checkout = ({ products }) => {
 
                 processPayment(userId, token, paymentData)
                     .then(response => {
-                       // console.log(response);
-                       setData({ ...data, success: response.success});
-                       emptyCart(()=>{
-                           console.log('payment success and empty cart')
-                            setData({loading:false})
-                        })
-                       //empty card
-                       //create order
+                        console.log(response);
+
+                        //empty card
+                        //create order
+                        const createOrderData = {
+                            products: products,
+                            transaction_id: response.transaction_id,
+                            amount: response.transaction.amount,
+                            address: deliveryAddress
+                        }
+
+                        createOrder(userId, token, createOrderData)
+
+                            .then(response => {
+
+                                emptyCart(() => {
+                                    console.log('payment success and empty cart')
+                                    setData({ ...data, success: true });
+                                });
+
+                            })
+
+                            .catch(error => {
+                                console.log(error)
+                                setData({ loading: false })
+                            })
+
 
                     })
+
                     .catch(error => {
-                        console.log(error)
-                        setData({loading:false})
-                    })
-
+                        console.log('dropin error: ', error);
+                        setData({ ...data, error: error.message });
+                    });
             })
 
-            .catch(error => {
-                console.log('dropin error: ', error);
-                setData({ ...data, error: error.message });
-            });
+
 
     }
 
@@ -103,10 +126,19 @@ const Checkout = ({ products }) => {
         <div onBlur={() => setData({ ...data, error: '' })}>
             {data.clientToken !== null && products.length > 0 ? (
                 <div>
+                    <div className="form-group mb-3">
+                        <label className="text-muted">Delivery Address:</label>
+                        <textarea
+                            onChange={handleAddress}
+                            className="form-control"
+                            value={data.address}
+                            placeholder="Type your delivery address here..."
+                        />
+                    </div>
                     <DropIn options={{
                         authorization: data.clientToken,
                         paypal: {
-                            flow:'vault'
+                            flow: 'vault'
                         }
                     }} onInstance={instance => data.instance = instance} />
                     <button onClick={buy} className="btn btn-success btn-block">Pay</button>
@@ -132,7 +164,7 @@ const Checkout = ({ products }) => {
     );
 
     const showLoading = (loading) => (
-        
+
         loading && <h2>loading...</h2>
     )
     return <div>
